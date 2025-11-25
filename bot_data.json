@@ -1,0 +1,59 @@
+{
+  "user_states": {},
+  "products": [
+    {
+      "user_id": 1409857437,
+      "product_id": "afb71e02-0d60-42ab-b8b7-928d5ab5ae91",
+      "title": "ячс",
+      "description": "mytestnewbot, [22.11.2025 14:54]\nIvan, введите заголовок объявления (максимум 100 символов):\n\nmytestnewbot, [22.11.2025 14:54]\nIvan, введите текст объявления, не менее 100 и не более 7500 символов:\n\nIvan Sidorenko, [22.11.2025 14:54]\nячсmytestnewbot, [22.11.2025 14:54]\nIvan, введите заголовок объявления (максимум 100 символов):\n\nmytestnewbot, [22.11.2025 14:54]\nIvan, введите текст объявления, не менее 100 и не более 7500 символов:\n\nIvan Sidorenko, [22.11.2025 14:54]\nячс",
+      "price": 50,
+      "price_type": "fixed",
+      "price_min": null,
+      "price_max": null,
+      "category": "100370_1_7",
+      "category_name": "Мужская одежда - Верхняя одежда - Парки",
+      "contact_phone": "+79613271725",
+      "display_phone": "+79613271725",
+      "contact_method": "both",
+      "main_images": [
+        "AgACAgIAAxkBAAIWaGkhpJUUW9RI_Ik1-WTr_IS1N8b-AAJKEGsbftcJSfNQy3R07ZnlAQADAgADeQADNgQ"
+      ],
+      "additional_images": [],
+      "all_images": [
+        "AgACAgIAAxkBAAIWaGkhpJUUW9RI_Ik1-WTr_IS1N8b-AAJKEGsbftcJSfNQy3R07ZnlAQADAgADeQADNgQ"
+      ],
+      "total_images": 1,
+      "shuffle_images": false,
+      "avito_delivery": false,
+      "delivery_services": [],
+      "delivery_discount": "none",
+      "multioffer": false,
+      "brand": "ACTON",
+      "size": "",
+      "condition": "good",
+      "sale_type": "manufacturer",
+      "placement_type": "cities",
+      "placement_method": "by_quantity",
+      "cities": [
+        "Москва",
+        "Санкт-Петербург",
+        "Новосибирск",
+        "Екатеринбург",
+        "Казань"
+      ],
+      "selected_cities": [],
+      "quantity": 5,
+      "metro_city": null,
+      "metro_stations": [],
+      "selected_metro_stations": [],
+      "start_date": "2025-11-29",
+      "start_time": "18:00",
+      "start_datetime": "2025-11-29T18:00:00",
+      "images": [
+        "AgACAgIAAxkBAAIWaGkhpJUUW9RI_Ik1-WTr_IS1N8b-AAJKEGsbftcJSfNQy3R07ZnlAQADAgADeQADNgQ"
+      ],
+      "image_count": 1,
+      "created_at": "2025-11-22T14:55:25.138496"
+    }
+  ]
+}

@@ -1,0 +1,480 @@
+import uuid
+from datetime import datetime, timedelta
+
+from aiogram.types import Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from bot.calendar import ProductCalendar
+
+class ProductService:
+    """Сервис для работы с продуктами"""
+
+    @staticmethod
+    def generate_guid() -> str:
+        """Генерация GUID для товара"""
+        return str(uuid.uuid4())
+
+    @staticmethod
+    async def show_main_categories(message: Message, user_name: str = ""):
+        """Показать основные категории"""
+        import config
+
+        builder = InlineKeyboardBuilder()
+
+        for cat_id, cat_data in config.AVITO_CATEGORIES.items():
+            builder.button(text=cat_data["name"], callback_data=f"cat_{cat_id}")
+
+        builder.adjust(1)
+
+        greeting = f"{user_name}, " if user_name else ""
+        await message.answer(
+            f"{greeting}🎯 Начинаем добавление нового товара!\n\n"
+            "Выберите основную категорию:",
+            reply_markup=builder.as_markup()
+        )
+
+    @staticmethod
+    async def show_subcategories(message: Message, category_id: str, user_name: str = ""):
+        """Показать подкатегории"""
+        import config
+
+        category_data = config.AVITO_CATEGORIES.get(category_id)
+        if not category_data:
+            await message.answer("Ошибка: категория не найдена")
+            return
+
+        subcategories = category_data.get("subcategories", {})
+        if not subcategories:
+            await message.answer("В этой категории нет подкатегорий")
+            return
+
+        builder = InlineKeyboardBuilder()
+
+        for subcat_id, subcat_data in subcategories.items():
+            if isinstance(subcat_data, dict) and "name" in subcat_data:
+                builder.button(text=f"📁 {subcat_data['name']}", callback_data=f"sub_{subcat_id}")
+            else:
+                builder.button(text=subcat_data, callback_data=f"sub_{subcat_id}")
+
+        builder.button(text="🔙 Назад к категориям", callback_data="back_categories")
+        builder.adjust(1)
+
+        greeting = f"{user_name}, " if user_name else ""
+        await message.answer(
+            f"{greeting}выберите подкатегорию для {category_data['name']}:",
+            reply_markup=builder.as_markup()
+        )
+
+    @staticmethod
+    async def show_subsubcategories(message: Message, subcategory_id: str, user_name: str = ""):
+        """Показать подкатегории третьего уровня"""
+        import config
+
+        subcategory_data = None
+        parent_category_name = ""
+
+        for cat_id, cat_data in config.AVITO_CATEGORIES.items():
+            subcategories = cat_data.get("subcategories", {})
+            if subcategory_id in subcategories:
+                subcategory_data = subcategories[subcategory_id]
+                parent_category_name = cat_data["name"]
+                break
+
+        if not subcategory_data or not isinstance(subcategory_data, dict):
+            await message.answer("Ошибка: подкатегория не найдена или не имеет вложенных категорий")
+            return
+
+        subsubcategories = subcategory_data.get("subcategories", {})
+        if not subsubcategories:
+            await message.answer("В этой подкатегории нет дополнительных категорий")
+            return
+
+        builder = InlineKeyboardBuilder()
+
+        for subsubcat_id, subsubcat_name in subsubcategories.items():
+            builder.button(text=subsubcat_name, callback_data=f"sub_{subsubcat_id}")
+
+        builder.button(text="🔙 Назад к подкатегориям", callback_data=f"back_sub_{subcategory_id}")
+        builder.adjust(1)
+
+        greeting = f"{user_name}, " if user_name else ""
+        await message.answer(
+            f"{greeting}выберите тип {subcategory_data['name']} для {parent_category_name}:",
+            reply_markup=builder.as_markup()
+        )
+
+    @staticmethod
+    def get_category_data(category_id: str):
+        """Получить данные категории"""
+        import config
+        return config.AVITO_CATEGORIES.get(category_id)
+
+    @staticmethod
+    def process_subcategory_selection(main_category_id: str, subcategory_id: str):
+        """Обработка выбора подкатегории"""
+        import config
+
+        category_data = config.AVITO_CATEGORIES.get(main_category_id)
+        if not category_data:
+            return None
+
+        # Ищем подкатегорию в основном списке и во вложенных подкатегориях
+        subcategories = category_data.get("subcategories", {})
+
+        # Сначала проверяем прямые подкатегории
+        subcategory_data = subcategories.get(subcategory_id)
+
+        if subcategory_data:
+            if isinstance(subcategory_data, dict) and "subcategories" in subcategory_data:
+                # Это категория с подкатегориями - возвращаем специальный маркер
+                return {
+                    'has_subcategories': True,
+                    'subcategory_id': subcategory_id,
+                    'category_name': f"{category_data['name']} - {subcategory_data['name']}",
+                    'subcategory_name': subcategory_data['name']
+                }
+            else:
+                # Это конечная подкатегория второго уровня
+                subcategory_name = subcategory_data
+
+                if not subcategory_name:
+                    return None
+
+                # Получаем ID категории для Avito
+                avito_category_id = config.CATEGORY_IDS.get(
+                    subcategory_id,
+                    config.CATEGORY_IDS.get(main_category_id)
+                )
+
+                return {
+                    'has_subcategories': False,
+                    'category': avito_category_id,
+                    'category_name': f"{category_data['name']} - {subcategory_name}",
+                    'subcategory_name': subcategory_name
+                }
+
+        # Если не нашли в прямых подкатегориях, ищем во вложенных
+        for subcat_id, subcat_data in subcategories.items():
+            if isinstance(subcat_data, dict) and "subcategories" in subcat_data:
+                subsubcategories = subcat_data.get("subcategories", {})
+                if subcategory_id in subsubcategories:
+                    # Нашли подкатегорию третьего уровня
+                    subsubcategory_name = subsubcategories[subcategory_id]
+
+                    # Получаем ID категории для Avito
+                    avito_category_id = config.CATEGORY_IDS.get(
+                        subcategory_id,
+                        config.CATEGORY_IDS.get(main_category_id)
+                    )
+
+                    return {
+                        'has_subcategories': False,
+                        'category': avito_category_id,
+                        'category_name': f"{category_data['name']} - {subcat_data['name']} - {subsubcategory_name}",
+                        'subcategory_name': subsubcategory_name
+                    }
+
+        return None
+
+    @staticmethod
+    def find_subsubcategory(main_category_id: str, subsubcategory_id: str):
+        """Поиск подкатегории третьего уровня"""
+        import config
+
+        category_data = config.AVITO_CATEGORIES.get(main_category_id)
+        if not category_data:
+            return None
+
+        subcategories = category_data.get("subcategories", {})
+
+        for subcat_id, subcat_data in subcategories.items():
+            if isinstance(subcat_data, dict) and "subcategories" in subcat_data:
+                subsubcategories = subcat_data.get("subcategories", {})
+                if subsubcategory_id in subsubcategories:
+                    subsubcategory_name = subsubcategories[subsubcategory_id]
+
+                    # Получаем ID категории для Avito
+                    avito_category_id = config.CATEGORY_IDS.get(
+                        subsubcategory_id,
+                        config.CATEGORY_IDS.get(main_category_id)
+                    )
+
+                    return {
+                        'category': avito_category_id,
+                        'category_name': f"{category_data['name']} - {subcat_data['name']} - {subsubcategory_name}",
+                        'subcategory_name': subsubcategory_name,
+                        'parent_subcategory_name': subcat_data['name']
+                    }
+
+        return None
+
+    @staticmethod
+    def get_subcategory_name(main_category_id: str, subcategory_id: str) -> str:
+        """Получить название подкатегории"""
+        import config
+
+        category_data = config.AVITO_CATEGORIES.get(main_category_id)
+        if not category_data:
+            return "Неизвестная категория"
+
+        subcategories = category_data.get("subcategories", {})
+        subcategory_data = subcategories.get(subcategory_id)
+
+        if isinstance(subcategory_data, dict) and "name" in subcategory_data:
+            return subcategory_data['name']
+        elif isinstance(subcategory_data, str):
+            return subcategory_data
+        else:
+            return "Неизвестная подкатегория"
+
+    @staticmethod
+    async def show_price_type_options(message: Message, user_name: str = ""):
+        """Показать варианты цены"""
+        builder = InlineKeyboardBuilder()
+
+        builder.button(text="💰 Фиксированная цена", callback_data="price_fixed")
+        builder.button(text="📊 Диапазон цен", callback_data="price_range")
+        builder.button(text="⏩ Пропустить", callback_data="price_skip")
+        builder.adjust(1)
+
+        greeting = f"{user_name}, " if user_name else ""
+        await message.answer(
+            f"{greeting}укажите стоимость:\n\n"
+            "1) 💰 Фиксированная цена\n"
+            "2) 📊 Диапазон цен\n"
+            "3) ⏩ Пропустить",
+            reply_markup=builder.as_markup()
+        )
+
+    @staticmethod
+    async def show_contact_methods(message: Message, user_name: str = ""):
+        """Показать варианты способов связи"""
+        builder = InlineKeyboardBuilder()
+
+        builder.button(text="📞 По телефону и в сообщении", callback_data="contact_both")
+        builder.button(text="📞 По телефону", callback_data="contact_phone")
+        builder.button(text="💬 В сообщении", callback_data="contact_message")
+        builder.adjust(1)
+
+        greeting = f"{user_name}, " if user_name else ""
+        await message.answer(
+            f"{greeting}выберите предпочтительный способ связи:",
+            reply_markup=builder.as_markup()
+        )
+
+    @staticmethod
+    async def ask_phone_number(message: Message, user_name: str = ""):
+        """Запрос номера телефона"""
+        from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+
+        greeting = f"{user_name}, " if user_name else ""
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="📞 Поделиться номером", request_contact=True)],
+                [KeyboardButton(text="✏️ Ввести вручную")]
+            ],
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
+
+        await message.answer(
+            f"{greeting}укажите контактный номер телефона:\n\n"
+            "Вы можете:\n"
+            "• Нажать кнопку '📞 Поделиться номером'\n"
+            "• Или ввести номер вручную",
+            reply_markup=keyboard
+        )
+
+    @staticmethod
+    async def ask_size(message: Message, user_name: str = ""):
+        """Запрос размера товара"""
+        builder = InlineKeyboardBuilder()
+
+        size_ranges = [
+            ["36", "36,5", "37", "37,5"],
+            ["38", "38,5", "39", "39,5"],
+            ["40", "40,5", "41", "41,5"],
+            ["42", "42,5", "43", "43,5"],
+            ["44", "44,5", "45", "45,5"],
+            ["46", "46,5", "47", "47,5", "48+"]
+        ]
+
+        for size_group in size_ranges:
+            for size in size_group:
+                builder.button(text=size, callback_data=f"size_{size}")
+
+        builder.adjust(4, 4, 4, 4, 5, 2)
+
+        greeting = f"{user_name}, " if user_name else ""
+        await message.answer(
+            f"{greeting}выберите размер обуви:",
+            reply_markup=builder.as_markup()
+        )
+
+    @staticmethod
+    async def ask_condition(message: Message, user_name: str = ""):
+        """Запрос состояния товара"""
+        builder = InlineKeyboardBuilder()
+
+        conditions = [
+            ("🆕 Новое с биркой", "new_with_tag"),
+            ("⭐ Отличное", "excellent"),
+            ("👍 Хорошее", "good"),
+            ("✅ Удовлетворительное", "satisfactory")
+        ]
+
+        for condition_name, condition_code in conditions:
+            builder.button(text=condition_name, callback_data=f"condition_{condition_code}")
+
+        builder.adjust(1)
+
+        greeting = f"{user_name}, " if user_name else ""
+        await message.answer(
+            f"{greeting}выберите состояние товара:",
+            reply_markup=builder.as_markup()
+        )
+
+    @staticmethod
+    async def ask_clothing_size(message: Message, user_name: str = ""):
+        """Запрос размера одежды"""
+        from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+        builder = InlineKeyboardBuilder()
+
+        clothing_sizes = [
+            "40 (XXS)", "42 (XS)", "44 (XS/S)", "46 (S)", "48 (M)",
+            "50 (L)", "52 (L/XL)", "54 (XL)", "56 (XXL)", "58 (XXL)",
+            "60 (3XL)", "62 (4XL)", "64 (5XL)", "66 (6XL)", "68 (7XL)",
+            "70 (7XL)", "72 (8XL)", "74 (8XL)", "76 (9XL)", "78 (10XL)",
+            "80 (10XL)", "82+ (10XL+)", "One size", "Без размера"
+        ]
+
+        for size in clothing_sizes:
+            builder.button(text=size, callback_data=f"clothing_size_{size}")
+
+        builder.adjust(2)  # 2 кнопки в ряду
+
+        greeting = f"{user_name}, " if user_name else ""
+
+        await message.answer(
+            f"{greeting}выберите размер одежды:",
+            reply_markup=builder.as_markup()
+        )
+
+    @staticmethod
+    async def ask_sale_type(message: Message, user_name: str = ""):
+        """Запрос типа продажи"""
+        builder = InlineKeyboardBuilder()
+
+        sale_types = [
+            ("🛒 Товар приобретен на продажу", "resale"),
+            ("🏭 Товар от производителя", "manufacturer"),
+            ("👤 Продаю своё", "personal")
+        ]
+
+        for sale_name, sale_code in sale_types:
+            builder.button(text=sale_name, callback_data=f"saletype_{sale_code}")
+
+        builder.adjust(1)
+
+        greeting = f"{user_name}, " if user_name else ""
+        await message.answer(
+            f"{greeting}выберите тип продажи:",
+            reply_markup=builder.as_markup()
+        )
+
+    @staticmethod
+    async def ask_placement_type(message: Message, user_name: str = ""):
+        """Запрос типа размещения"""
+        builder = InlineKeyboardBuilder()
+
+        placement_types = [
+            ("🏙️ По городам", "cities"),
+            ("🚇 По станциям метро", "metro")
+        ]
+
+        for placement_name, placement_code in placement_types:
+            builder.button(text=placement_name, callback_data=f"placement_{placement_code}")
+
+        builder.adjust(1)
+
+        greeting = f"{user_name}, " if user_name else ""
+        await message.answer(
+            f"{greeting}выберите вариант размещения объявлений:",
+            reply_markup=builder.as_markup()
+        )
+
+    @staticmethod
+    async def ask_start_date(message: Message, user_name: str = ""):
+        """Запрос даты старта продажи с быстрыми кнопками"""
+        greeting = f"{user_name}, " if user_name else ""
+
+        today = datetime.now().date()
+        tomorrow = today + timedelta(days=1)
+        in_3_days = today + timedelta(days=3)
+        in_week = today + timedelta(days=7)
+        in_2_weeks = today + timedelta(days=14)
+
+        calendar = ProductCalendar()
+
+        await message.answer(
+            f"{greeting}выберите дату начала продажи:\n\n"
+            f"📅 Быстрый выбор:\n"
+            f"• Завтра - {tomorrow.strftime('%d.%m.%Y')}\n"
+            f"• Через 3 дня - {in_3_days.strftime('%d.%m.%Y')}\n"
+            f"• Через неделю - {in_week.strftime('%d.%m.%Y')}\n"
+            f"• Через 2 недели - {in_2_weeks.strftime('%d.%m.%Y')}\n\n"
+            "💡 Вы можете выбрать быструю дату или указать конкретную дату вручную.\n"
+            "⏩ Или пропустите - продажа начнется сразу после публикации.",
+            reply_markup=await calendar.start_calendar()
+        )
+
+    @staticmethod
+    async def complete_product_creation(message: Message, state, user_name: str = ""):
+        """Завершение создания товара и сохранение в базу"""
+        from bot.handlers.base import StateManager
+
+        try:
+            data = await StateManager.get_data_safe(state)
+
+            # Проверяем обязательные поля
+            required_fields = ['title', 'description', 'category', 'contact_phone']
+            missing_fields = [field for field in required_fields if not data.get(field)]
+
+            if missing_fields:
+                await message.answer(f"Ошибка: не заполнены обязательные поля: {', '.join(missing_fields)}")
+                return
+
+            try:
+                from bot.database import db
+                await db.add_product(message.chat.id, data)
+                await db.clear_user_state(message.from_user.id)
+            except Exception as e:
+                print(f"Database error: {e}")
+
+            await state.clear()
+
+            main_count = len(data.get('main_images', []))
+            additional_count = len(data.get('additional_images', []))
+            total_images = main_count + additional_count
+
+            await message.answer(
+                f"{user_name}, ✅ товар успешно добавлен!\n\n"
+                f"📋 Статистика:\n"
+                f"• Заголовок: {data['title'][:50]}...\n"
+                f"• Описание: {len(data['description'])} символов\n"
+                f"• Категория: {data.get('category_name', 'Не указана')}\n"
+                f"• Основные фото: {main_count}\n"
+                f"• Дополнительные фото: {additional_count}\n"
+                f"• Всего фото: {total_images}\n\n"
+                f"📊 Итог: создан товар с {total_images} фото\n\n"
+                f"Используйте команды:\n"
+                f"/new_product - добавить новый товар\n"
+                f"/my_products - посмотреть все товары\n"
+                f"/generate_xml - создать XML файл для Avito"
+            )
+
+        except Exception as e:
+            print(f"Error in complete_product_creation: {e}")
+            await message.answer(
+                "❌ Произошла ошибка при сохранении товара. Попробуйте еще раз."
+            )
