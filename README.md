@@ -1,1 +1,9 @@
-# Autogenerate
+# Настройка
+создать файл .env с содержимым
+
+BOT_TOKEN=782....:AA....
+ADMIN_IDS=12
+
+ADMIN_IDS - пока не используется
+
+# Запуск через main.py
